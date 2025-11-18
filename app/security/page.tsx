@@ -1,4 +1,4 @@
-"use client"
+    "use client"
 
 import Link from "next/link"
 import { ArrowLeftIcon, ShieldIcon, LockIcon, ServerIcon, CodeIcon, BugIcon, AlertTriangleIcon } from "lucide-react"

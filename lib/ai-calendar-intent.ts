@@ -253,7 +253,7 @@ IMPORTANT GUIDELINES:
     })()
 
 
-    return await Promise.race([intentPromise, timeoutPromise])
+    return await Promise.race([intentPromise, timeoutPromise]) as CalendarIntent
   } catch (error) {
     console.error("Error processing calendar intent:", error)
     if (error instanceof Error && error.message === "Intent processing timed out") {

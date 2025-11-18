@@ -19,7 +19,7 @@ import {
   ClockIcon,
   CalendarDaysIcon,
 } from "lucide-react"
-import { type CalendarEvent, getEvents, getUserCategories, getSharedEvents } from "@/lib/calendar"
+import { type CalendarEvent, type CalendarCategory, getEvents, getUserCategories, getSharedEvents } from "@/lib/calendar"
 import { EventDialog } from "./event-dialog"
 import { ChatPanel } from "./chat-panel"
 import { Input } from "@/components/ui/input"
@@ -84,19 +84,29 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface MultiCalendarViewProps {
   initialEvents: CalendarEvent[]
   initialCategories?: string[]
+  userId?: string
 }
 
-export function MultiCalendarView({ initialEvents, initialCategories = [] }: MultiCalendarViewProps) {
+export function MultiCalendarView({ initialEvents, initialCategories = [], userId }: MultiCalendarViewProps) {
   const { data: session } = useSession()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
+  const [hasInitialLoad, setHasInitialLoad] = useState(initialEvents.length > 0)
   const [view, setView] = useState<"month" | "week" | "day" | "year" | "agenda">("month")
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [showEventDialog, setShowEventDialog] = useState(false)
   const [showNaturalLanguageDialog, setShowNaturalLanguageDialog] = useState(false)
   const [showChatPanel, setShowChatPanel] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [categories, setCategories] = useState<string[]>(initialCategories)
+  const [categories, setCategories] = useState<CalendarCategory[]>(
+    initialCategories.map((name, index) => ({
+      id: `category-${index}`,
+      name,
+      color: CATEGORY_COLORS[name] || 'bg-gray-500',
+      userId: userId || session?.user?.id || '',
+      visible: true
+    }))
+  )
   const [visibleCalendars, setVisibleCalendars] = useState<Record<string, boolean>>({
     personal: true,
     work: true,
@@ -110,98 +120,104 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
   const [agendaRange, setAgendaRange] = useState<"day" | "week" | "month">("week")
 
 
-  useEffect(() => {
+  const fetchEvents = useCallback(async (forceRefresh = false) => {
     if (!session?.user?.id) return
+    
+    // Skip fetching if we have initial data and this is the first load
+    if (!forceRefresh && hasInitialLoad && initialEvents.length > 0) {
+      setHasInitialLoad(false)
+      return
+    }
 
-    const fetchEvents = async () => {
-      setIsLoading(true)
-      try {
-        let startDate: Date, endDate: Date
+    setIsLoading(true)
+    try {
+      let startDate: Date, endDate: Date
 
-
-        if (view === "month") {
-
-          startDate = startOfMonth(currentDate)
-          if (!startDate) startDate = new Date(currentDate)
-
-
-          endDate = endOfMonth(currentDate)
-          if (!endDate) endDate = new Date(currentDate)
-
-
-          const firstDayOfWeek = getDay(startDate)
-          startDate = subDays(startDate, firstDayOfWeek)
-
-          const lastDayOfWeek = getDay(endDate)
-          endDate = addDays(endDate, 6 - lastDayOfWeek)
-        } else if (view === "week") {
+      if (view === "month") {
+        startDate = startOfMonth(currentDate)
+        if (!startDate) startDate = new Date(currentDate)
+        endDate = endOfMonth(currentDate)
+        if (!endDate) endDate = new Date(currentDate)
+        const firstDayOfWeek = getDay(startDate)
+        startDate = subDays(startDate, firstDayOfWeek)
+        const lastDayOfWeek = getDay(endDate)
+        endDate = addDays(endDate, 6 - lastDayOfWeek)
+      } else if (view === "week") {
+        startDate = startOfWeek(currentDate)
+        endDate = endOfWeek(currentDate)
+      } else if (view === "year") {
+        startDate = startOfYear(currentDate)
+        endDate = endOfYear(currentDate)
+      } else if (view === "agenda") {
+        if (agendaRange === "day") {
+          startDate = setHours(setMinutes(setSeconds(setMilliseconds(currentDate, 0), 0), 0), 0)
+          endDate = setHours(setMinutes(setSeconds(setMilliseconds(currentDate, 999), 59), 59), 23)
+        } else if (agendaRange === "week") {
           startDate = startOfWeek(currentDate)
           endDate = endOfWeek(currentDate)
-        } else if (view === "year") {
-          startDate = startOfYear(currentDate)
-          endDate = endOfYear(currentDate)
-        } else if (view === "agenda") {
-          if (agendaRange === "day") {
-            startDate = setHours(setMinutes(setSeconds(setMilliseconds(currentDate, 0), 0), 0), 0)
-            endDate = setHours(setMinutes(setSeconds(setMilliseconds(currentDate, 999), 59), 59), 23)
-          } else if (agendaRange === "week") {
-            startDate = startOfWeek(currentDate)
-            endDate = endOfWeek(currentDate)
-          } else {
-            startDate = startOfMonth(currentDate)
-            endDate = endOfMonth(currentDate)
-          }
         } else {
-
-          startDate = new Date(currentDate)
-          startDate.setHours(0, 0, 0, 0)
-          endDate = new Date(currentDate)
-          endDate.setHours(23, 59, 59, 999)
+          startDate = startOfMonth(currentDate)
+          endDate = endOfMonth(currentDate)
         }
+      } else {
+        startDate = new Date(currentDate)
+        startDate.setHours(0, 0, 0, 0)
+        endDate = new Date(currentDate)
+        endDate.setHours(23, 59, 59, 999)
+      }
 
+      const fetchedEvents = await getEvents(session.user.id, startDate, endDate)
+      setEvents(fetchedEvents || [])
 
-        const fetchedEvents = await getEvents(session.user.id, startDate, endDate)
-        setEvents(fetchedEvents || [])
+      try {
+        const fetchedSharedEvents = await getSharedEvents(session.user.id, startDate, endDate)
+        const filteredSharedEvents = (fetchedSharedEvents || []).filter((event) => {
+          if (!event || !event.start) return false
+          try {
+            const eventStart = parseISO(event.start)
+            return isWithinInterval(eventStart, { start: startDate, end: endDate })
+          } catch (error) {
+            console.error("Error filtering shared event:", error)
+            return false
+          }
+        })
+        setSharedEvents(filteredSharedEvents)
+      } catch (sharedError) {
+        console.error("Error fetching shared events:", sharedError)
+        setSharedEvents([])
+      }
 
-
-        try {
-          const fetchedSharedEvents = await getSharedEvents(session.user.id, startDate, endDate)
-
-          const filteredSharedEvents = (fetchedSharedEvents || []).filter((event) => {
-            if (!event || !event.start) return false
-            try {
-              const eventStart = parseISO(event.start)
-              return isWithinInterval(eventStart, { start: startDate, end: endDate })
-            } catch (error) {
-              console.error("Error filtering shared event:", error)
-              return false
-            }
-          })
-          setSharedEvents(filteredSharedEvents)
-        } catch (sharedError) {
-          console.error("Error fetching shared events:", sharedError)
-          setSharedEvents([])
-        }
-
-
+      // Only fetch categories if we don't have them or on force refresh
+      if (categories.length === 0 || forceRefresh) {
         try {
           const fetchedCategories = await getUserCategories(session.user.id)
           setCategories(fetchedCategories || [])
         } catch (categoriesError) {
           console.error("Error fetching categories:", categoriesError)
-          setCategories([])
         }
-      } catch (error) {
-        console.error("Error fetching calendar data:", error)
-        setEvents([])
-        setSharedEvents([])
-      } finally {
-        setIsLoading(false)
       }
+    } catch (error) {
+      console.error("Error fetching calendar data:", error)
+      setEvents([])
+      setSharedEvents([])
+    } finally {
+      setIsLoading(false)
     }
+  }, [currentDate, view, session, agendaRange, hasInitialLoad, initialEvents.length, categories.length])
 
-    fetchEvents()
-  }, [currentDate, view, session, agendaRange])
+  useEffect(() => {
+    // Only fetch if we don't have initial data or if the date/view changed significantly
+    if (!hasInitialLoad || initialEvents.length === 0) {
+      fetchEvents()
+    }
+  }, [fetchEvents, hasInitialLoad])
+
+  // Separate effect for when user changes date/view - this will force a refresh
+  useEffect(() => {
+    if (hasInitialLoad) {
+      setHasInitialLoad(false) // Mark that we no longer have fresh initial data
+    }
+  }, [currentDate, view, agendaRange])
 
 
   const filteredEvents = useMemo(() => {
@@ -224,13 +240,13 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
 
 
     if (selectedCategories.length > 0) {
-      filtered = filtered.filter((event) => event.category && selectedCategories.includes(event.category))
+      filtered = filtered.filter((event) => event.categoryId && selectedCategories.includes(event.categoryId))
     }
 
 
     filtered = filtered.filter((event) => {
 
-      if (event.shared && visibleCalendars.shared) {
+      if (event.isShared && visibleCalendars.shared) {
         return true
       }
 
@@ -238,16 +254,16 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
         return true
       }
 
-      if (event.category === "Work" && visibleCalendars.work) {
+      if (event.categoryId === "Work" && visibleCalendars.work) {
         return true
       }
 
-      if (event.category === "Family" && visibleCalendars.family) {
+      if (event.categoryId === "Family" && visibleCalendars.family) {
         return true
       }
 
 
-      return !event.category && !event.shared && visibleCalendars.personal
+      return !event.categoryId && !event.isShared && visibleCalendars.personal
     })
 
     return filtered
@@ -467,16 +483,12 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
 
   const handleAIToolExecution = useCallback(
     async (result: any) => {
-
+      // Force refresh after AI tool execution
       if (session?.user?.id) {
-        const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-        const refreshedEvents = await getEvents(session.user.id, startDate, endDate)
-        setEvents(refreshedEvents)
+        fetchEvents(true)
       }
     },
-    [currentDate, session],
+    [fetchEvents, session],
   )
 
 
@@ -499,11 +511,11 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
 
 
   const getEventColor = useCallback((event: CalendarEvent) => {
-    if (event.category && CATEGORY_COLORS[event.category]) {
-      return CATEGORY_COLORS[event.category]
+    if (event.categoryId && CATEGORY_COLORS[event.categoryId]) {
+      return CATEGORY_COLORS[event.categoryId]
     }
 
-    if (event.shared) {
+    if (event.isShared) {
       return CALENDAR_TYPES.shared.color
     }
 
@@ -741,15 +753,15 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
                 <ScrollArea className="h-[200px] pr-3">
                   <div className="space-y-2 pr-2">
                     {categories.map((category) => (
-                      <div key={category} className="flex items-center space-x-2">
+                      <div key={category.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`category-${category}`}
-                          checked={selectedCategories.includes(category)}
-                          onCheckedChange={() => toggleCategoryFilter(category)}
+                          checked={selectedCategories.includes(category.name)}
+                          onCheckedChange={() => toggleCategoryFilter(category.name)}
                         />
                         <label htmlFor={`category-${category}`} className="text-sm font-medium flex items-center gap-2">
-                          <span className={`w-3 h-3 rounded-full ${CATEGORY_COLORS[category] || "bg-gray-500"}`}></span>
-                          {category}
+                          <span className={`w-3 h-3 rounded-full ${CATEGORY_COLORS[category.name] || "bg-gray-500"}`}></span>
+                          {category.name}
                         </label>
                       </div>
                     ))}
@@ -1094,12 +1106,12 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
           {view === "agenda" && (
             <div className="p-4">
               <div className="space-y-4">
-                {Object.keys(eventsForAgenda.eventsByDate).length > 0 ? (
-                  Object.keys(eventsForAgenda.eventsByDate)
+                {Object.keys((eventsForAgenda as any).eventsByDate || {}).length > 0 ? (
+                  Object.keys((eventsForAgenda as any).eventsByDate || {})
                     .sort()
                     .map((dateKey) => {
                       const date = new Date(dateKey)
-                      const events = eventsForAgenda.eventsByDate[dateKey]
+                      const events = (eventsForAgenda as any).eventsByDate?.[dateKey] || []
 
                       return (
                         <div key={dateKey} className="border rounded-lg overflow-hidden">
@@ -1198,7 +1210,7 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
         open={showEventDialog}
         onOpenChange={setShowEventDialog}
         event={selectedEvent}
-        categories={categories}
+        categories={categories.map(cat => cat.name)}
         onEventUpdated={(updatedEvent) => {
           setEvents((prev) => prev.map((e) => (e.id === updatedEvent.id ? updatedEvent : e)))
           setSelectedEvent(null)
@@ -1211,17 +1223,13 @@ export function MultiCalendarView({ initialEvents, initialCategories = [] }: Mul
 
       {/* Natural Language Event Dialog */}
       <NaturalLanguageEventDialog
-        open={showNaturalLanguageDialog}
-        onOpenChange={setShowNaturalLanguageDialog}
+        isOpen={showNaturalLanguageDialog}
+        onClose={() => setShowNaturalLanguageDialog(false)}
+        userId={session?.user?.id || ""}
         onEventCreated={() => {
-
+          // Force refresh after event creation
           if (session?.user?.id) {
-            const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-            const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-            getEvents(session.user.id, startDate, endDate).then((refreshedEvents) => {
-              setEvents(refreshedEvents)
-            })
+            fetchEvents(true)
           }
         }}
       />

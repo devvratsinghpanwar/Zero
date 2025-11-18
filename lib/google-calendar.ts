@@ -1,7 +1,7 @@
-import { kv } from "@vercel/kv"
-import type { CalendarEvent } from "@/lib/calendar"
+import { kv } from "@/lib/kv-config"
+import type { CalendarEvent } from "../lib/calendar"
 
-import { getUserTimezone } from "@/lib/auth"
+import { getUserTimezone } from "../lib/auth"
 
 
 const GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3"
@@ -111,11 +111,11 @@ function convertGoogleEventToCalendarEvent(googleEvent: GoogleCalendarEvent, use
     description: googleEvent.description,
     start: googleEvent.start.dateTime,
     end: googleEvent.end.dateTime,
+    allDay: false, // Google API events with dateTime are not all-day
     location: googleEvent.location,
     color: googleEvent.colorId ? colorMap[googleEvent.colorId] || "#3b82f6" : "#3b82f6",
     userId,
     source: "google",
-
     timezone: googleEvent.start.timeZone || "UTC",
   }
 }

@@ -45,6 +45,7 @@
     "@touch4it/ical-timezones": "latest",
     "@types/luxon": "latest",
     "@types/mocha": "latest",
+    "@upstash/redis": "^1.35.6",
     "@vercel/analytics": "latest",
     "@vercel/kv": "latest",
     "ai": "latest",
@@ -56,6 +57,7 @@
     "date-fns": "latest",
     "date-fns-tz": "latest",
     "dayjs": "latest",
+    "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
     "framer-motion": "latest",
     "geist": "latest",
@@ -78,6 +80,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "rrule": "latest",
+    "server-only": "^0.0.1",
     "sonner": "^1.7.1",
     "svelte": "latest",
     "tailwind-merge": "^2.5.5",
@@ -89,7 +92,7 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^22.19.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8",

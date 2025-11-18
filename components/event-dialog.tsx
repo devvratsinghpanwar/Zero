@@ -45,8 +45,9 @@ import { format, parseISO, addDays } from "date-fns"
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  start: z.string().min(1, "Start date is required"),
-  end: z.string().min(1, "End date is required"),
+  date: z.string().min(1, "Date is required"),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
   location: z.string().optional(),
   color: z.string().default("#3b82f6"),
   timezone: z.string(),
@@ -106,8 +107,9 @@ export function EventDialog({
     defaultValues: {
       title: "",
       description: "",
-      start: new Date().toISOString().slice(0, 16),
-      end: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+      date: new Date().toISOString().slice(0, 10),
+      startTime: new Date().toTimeString().slice(0, 5),
+      endTime: new Date(Date.now() + 3600000).toTimeString().slice(0, 5),
       location: "",
       color: "#3b82f6",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -148,11 +150,15 @@ export function EventDialog({
       setIsRecurringInstance(!!event.isRecurringInstance)
 
 
+      const eventStart = new Date(event.start)
+      const eventEnd = new Date(event.end)
+      
       form.reset({
         title: event.title,
         description: event.description || "",
-        start: formatDateTimeForInput(event.start, event.timezone, event.allDay),
-        end: formatDateTimeForInput(event.end, event.timezone, event.allDay),
+        date: eventStart.toISOString().slice(0, 10),
+        startTime: event.allDay ? "" : eventStart.toTimeString().slice(0, 5),
+        endTime: event.allDay ? "" : eventEnd.toTimeString().slice(0, 5),
         location: event.location || "",
         color: event.color || "#3b82f6",
         timezone: event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -165,13 +171,13 @@ export function EventDialog({
         recurrenceEndOn: event.recurrence?.until
           ? event.recurrence.until.slice(0, 10)
           : addDays(new Date(), 30).toISOString().slice(0, 10),
-        recurrenceByDay: event.recurrence?.byDay || [],
+        recurrenceByDay: (event.recurrence?.byDay as ("MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU")[]) || [],
         recurrenceByMonthDay: event.recurrence?.byMonthDay || [],
         recurrenceByMonth: event.recurrence?.byMonth || [],
         reminders: event.reminders?.map((r) => ({ time: r.minutes, unit: "minutes" as const })) || [
           { time: 30, unit: "minutes" as const },
         ],
-        category: event.category || "",
+        category: event.categoryId || "",
       })
     } else {
 
@@ -179,8 +185,9 @@ export function EventDialog({
       form.reset({
         title: "",
         description: "",
-        start: new Date().toISOString().slice(0, 16),
-        end: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+        date: new Date().toISOString().slice(0, 10),
+        startTime: new Date().toTimeString().slice(0, 5),
+        endTime: new Date(Date.now() + 3600000).toTimeString().slice(0, 5),
         location: "",
         color: "#3b82f6",
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -330,9 +337,16 @@ export function EventDialog({
     }
 
     try {
+      // Combine date and time fields
+      const startDateTime = values.allDay 
+        ? `${values.date}T00:00:00`
+        : `${values.date}T${values.startTime || '00:00'}:00`
+      const endDateTime = values.allDay 
+        ? `${values.date}T23:59:59`
+        : `${values.date}T${values.endTime || '23:59'}:00`
 
-      const startUTC = convertToUTC(values.start, values.timezone, values.allDay)
-      const endUTC = convertToUTC(values.end, values.timezone, values.allDay)
+      const startUTC = convertToUTC(startDateTime, values.timezone, values.allDay)
+      const endUTC = convertToUTC(endDateTime, values.timezone, values.allDay)
 
 
       const recurrence = values.isRecurring
@@ -376,7 +390,7 @@ export function EventDialog({
         allDay: values.allDay,
         recurrence,
         reminders,
-        category: finalCategory,
+        categoryId: finalCategory,
       }
 
 
@@ -451,7 +465,7 @@ export function EventDialog({
           await deleteEvent(session.user.id, event.id)
         } else if (editOption === "all") {
 
-          await deleteEvent(session.user.id, event.originalEventId, true)
+          await deleteEvent(session.user.id, event.originalEventId || event.id)
         } else if (editOption === "future") {
 
 
@@ -484,11 +498,16 @@ export function EventDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="dialog-content max-w-lg">
-        <DialogHeader className="dialog-header">
-          <DialogTitle className="dialog-title">{event ? "Edit Event" : "Create Event"}</DialogTitle>
-          <DialogDescription className="dialog-description">
-            {event ? "Make changes to your event here." : "Add a new event to your calendar."}
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-0 shadow-2xl">
+        <DialogHeader className="text-center pb-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
+            <ClockIcon className="h-8 w-8 text-white" />
+          </div>
+          <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400 bg-clip-text text-transparent">
+            {event ? "Edit Your Event" : "Create New Event"}
+          </DialogTitle>
+          <DialogDescription className="text-gray-600 dark:text-gray-400 mt-2">
+            {event ? "Make changes to your event details" : "Add a new event to your calendar with all the details"}
           </DialogDescription>
         </DialogHeader>
 
@@ -521,15 +540,15 @@ export function EventDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid grid-cols-5 mb-4">
-                <TabsTrigger value="basic">Basic</TabsTrigger>
-                <TabsTrigger value="recurrence">Recurrence</TabsTrigger>
-                <TabsTrigger value="reminders">Reminders</TabsTrigger>
-                <TabsTrigger value="timezone">Timezone</TabsTrigger>
-                <TabsTrigger value="more">More</TabsTrigger>
+              <TabsList className="grid grid-cols-5 mb-6 h-12 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+                <TabsTrigger value="basic" className="rounded-lg font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Basic</TabsTrigger>
+                <TabsTrigger value="recurrence" className="rounded-lg font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Recurrence</TabsTrigger>
+                <TabsTrigger value="reminders" className="rounded-lg font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Reminders</TabsTrigger>
+                <TabsTrigger value="timezone" className="rounded-lg font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Timezone</TabsTrigger>
+                <TabsTrigger value="more" className="rounded-lg font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">More</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="basic" className="space-y-4 px-6">
+              <TabsContent value="basic" className="space-y-6 px-6 py-4">
                 <FormField
                   control={form.control}
                   name="title"
@@ -537,12 +556,12 @@ export function EventDialog({
                     <FormItem>
                       <FormControl>
                         <Input
-                          placeholder="Event title"
+                          placeholder="Enter event title..."
                           {...field}
-                          className="text-lg font-medium border-none px-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-mono-400"
+                          className="text-xl font-semibold border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 py-3 focus-visible:ring-0 focus-visible:border-blue-500 bg-transparent placeholder:text-gray-400"
                         />
                       </FormControl>
-                      <FormMessage className="text-mono-500" />
+                      <FormMessage className="text-red-500 mt-1" />
                     </FormItem>
                   )}
                 />
@@ -551,183 +570,228 @@ export function EventDialog({
                   control={form.control}
                   name="allDay"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                    <FormItem className="flex flex-row items-center space-x-4 space-y-0 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
                       <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        <Checkbox 
+                          checked={field.value} 
+                          onCheckedChange={field.onChange}
+                          className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" 
+                        />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>All-day event</FormLabel>
-                        <FormDescription>Event will last the entire day</FormDescription>
+                        <FormLabel className="text-base font-medium">All-day event</FormLabel>
+                        <FormDescription className="text-gray-600 dark:text-gray-400">This event will last the entire day</FormDescription>
                       </div>
                     </FormItem>
                   )}
                 />
 
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <ClockIcon className="h-5 w-5" />
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                      <ClockIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Date & Time</h3>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 flex-1">
-                    <FormField
-                      control={form.control}
-                      name="start"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              type={isAllDay ? "date" : "datetime-local"}
-                              {...field}
-                              className="rounded-lg border-mono-200 dark:border-mono-700 h-9 text-sm focus-visible:ring-mono-400 dark:focus-visible:ring-mono-500"
-                            />
-                          </FormControl>
-                          <FormMessage className="text-mono-500" />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="end"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              type={isAllDay ? "date" : "datetime-local"}
-                              {...field}
-                              className="rounded-lg border-mono-200 dark:border-mono-700 h-9 text-sm focus-visible:ring-mono-400 dark:focus-visible:ring-mono-500"
-                            />
-                          </FormControl>
-                          <FormMessage className="text-mono-500" />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <MapPinIcon className="h-5 w-5" />
-                  </div>
+                  
                   <FormField
                     control={form.control}
-                    name="location"
+                    name="date"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">Date</FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="Add location"
+                            type="date"
                             {...field}
-                            className="rounded-lg border-mono-200 dark:border-mono-700 h-9 text-sm focus-visible:ring-mono-400 dark:focus-visible:ring-mono-500"
+                            className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-transparent"
                           />
                         </FormControl>
-                        <FormMessage className="text-mono-500" />
+                        <FormMessage className="text-red-500 mt-1" />
                       </FormItem>
                     )}
                   />
+                  
+                  {!isAllDay && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="startTime"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">Start Time</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="time"
+                                {...field}
+                                className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-transparent"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-red-500 mt-1" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="endTime"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-300">End Time</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="time"
+                                {...field}
+                                className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-transparent"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-red-500 mt-1" />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <AlignLeftIcon className="h-5 w-5" />
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-green-500 to-blue-500 text-white">
+                      <MapPinIcon className="h-5 w-5" />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input
+                              placeholder="Add location (optional)"
+                              {...field}
+                              className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:border-transparent"
+                            />
+                          </FormControl>
+                          <FormMessage className="text-red-500 mt-1" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                      <AlignLeftIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Description</h3>
                   </div>
                   <FormField
                     control={form.control}
                     name="description"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem>
                         <FormControl>
                           <Textarea
-                            placeholder="Add a description"
-                            className="resize-none rounded-lg min-h-[100px] border-mono-200 dark:border-mono-700 focus-visible:ring-mono-400 dark:focus-visible:ring-mono-500"
+                            placeholder="Add event description, notes, or agenda..."
+                            className="resize-none rounded-lg min-h-[120px] border-gray-300 dark:border-gray-600 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:border-transparent text-base"
                             {...field}
                           />
                         </FormControl>
-                        <FormMessage className="text-mono-500" />
+                        <FormMessage className="text-red-500 mt-1" />
                       </FormItem>
                     )}
                   />
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 rounded-lg flex items-center justify-center overflow-hidden">
-                    <div
-                      className={cn(
-                        "w-full h-full",
-                        form.watch("color") === "#3b82f6" && "bg-mono-900 dark:bg-mono-100",
-                        form.watch("color") === "#10b981" && "bg-mono-700 dark:bg-mono-300",
-                        form.watch("color") === "#ef4444" && "bg-mono-500 dark:bg-mono-500",
-                        form.watch("color") === "#f59e0b" && "bg-mono-300 dark:bg-mono-700",
-                        form.watch("color") === "#8b5cf6" && "bg-mono-200 dark:bg-mono-800",
-                      )}
-                    />
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden">
+                      <div
+                        className={cn(
+                          "w-full h-full rounded-full",
+                          form.watch("color") === "#3b82f6" && "bg-blue-500",
+                          form.watch("color") === "#10b981" && "bg-emerald-500",
+                          form.watch("color") === "#ef4444" && "bg-red-500",
+                          form.watch("color") === "#f59e0b" && "bg-amber-500",
+                          form.watch("color") === "#8b5cf6" && "bg-purple-500",
+                        )}
+                      />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Event Color</h3>
                   </div>
                   <FormField
                     control={form.control}
                     name="color"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="rounded-lg border-mono-200 dark:border-mono-700 h-9">
-                              <SelectValue placeholder="Select a color" />
+                            <SelectTrigger className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-blue-500">
+                              <SelectValue placeholder="Choose event color" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="rounded-lg border-mono-200 dark:border-mono-700">
-                            <SelectItem value="#3b82f6" className="rounded-md my-1 cursor-pointer">
-                              <div className="flex items-center">
-                                <div className="mr-2 h-4 w-4 rounded-full bg-mono-900 dark:bg-mono-100" />
-                                <span>Black</span>
+                          <SelectContent className="rounded-lg border-gray-300 dark:border-gray-600">
+                            <SelectItem value="#3b82f6" className="rounded-lg my-1 cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                <div className="h-6 w-6 rounded-full bg-blue-500" />
+                                <span>Blue</span>
                               </div>
                             </SelectItem>
-                            <SelectItem value="#10b981" className="rounded-md my-1 cursor-pointer">
-                              <div className="flex items-center">
-                                <div className="mr-2 h-4 w-4 rounded-full bg-mono-700 dark:bg-mono-300" />
-                                <span>Dark Gray</span>
+                            <SelectItem value="#10b981" className="rounded-lg my-1 cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                <div className="h-6 w-6 rounded-full bg-emerald-500" />
+                                <span>Green</span>
                               </div>
                             </SelectItem>
-                            <SelectItem value="#ef4444" className="rounded-md my-1 cursor-pointer">
-                              <div className="flex items-center">
-                                <div className="mr-2 h-4 w-4 rounded-full bg-mono-500 dark:bg-mono-500" />
-                                <span>Gray</span>
+                            <SelectItem value="#ef4444" className="rounded-lg my-1 cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                <div className="h-6 w-6 rounded-full bg-red-500" />
+                                <span>Red</span>
                               </div>
                             </SelectItem>
-                            <SelectItem value="#f59e0b" className="rounded-md my-1 cursor-pointer">
-                              <div className="flex items-center">
-                                <div className="mr-2 h-4 w-4 rounded-full bg-mono-300 dark:bg-mono-700" />
-                                <span>Light Gray</span>
+                            <SelectItem value="#f59e0b" className="rounded-lg my-1 cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                <div className="h-6 w-6 rounded-full bg-amber-500" />
+                                <span>Orange</span>
                               </div>
                             </SelectItem>
-                            <SelectItem value="#8b5cf6" className="rounded-md my-1 cursor-pointer">
-                              <div className="flex items-center">
-                                <div className="mr-2 h-4 w-4 rounded-full bg-mono-200 dark:bg-mono-800" />
-                                <span>Subtle</span>
+                            <SelectItem value="#8b5cf6" className="rounded-lg my-1 cursor-pointer">
+                              <div className="flex items-center gap-3">
+                                <div className="h-6 w-6 rounded-full bg-purple-500" />
+                                <span>Purple</span>
                               </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-mono-500" />
+                        <FormMessage className="text-red-500 mt-1" />
                       </FormItem>
                     )}
                   />
                 </div>
               </TabsContent>
 
-              <TabsContent value="recurrence" className="space-y-4 px-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <RepeatIcon className="h-5 w-5" />
+              <TabsContent value="recurrence" className="space-y-6 px-6 py-4">
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-green-500 to-blue-500 text-white">
+                      <RepeatIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Repeat Settings</h3>
                   </div>
-                  <div className="flex-1 space-y-4">
+                  <div className="space-y-4">
                     <FormField
                       control={form.control}
                       name="isRecurring"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Recurring Event</FormLabel>
-                            <FormDescription>Set this event to repeat on a schedule</FormDescription>
+                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 border-gray-200 dark:border-gray-700 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                          <div className="space-y-1">
+                            <FormLabel className="text-base font-medium">Recurring Event</FormLabel>
+                            <FormDescription className="text-gray-600 dark:text-gray-400">Set this event to repeat on a schedule</FormDescription>
                           </div>
                           <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            <Checkbox 
+                              checked={field.value} 
+                              onCheckedChange={field.onChange}
+                              className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -961,10 +1025,13 @@ export function EventDialog({
                 </div>
               </TabsContent>
 
-              <TabsContent value="reminders" className="space-y-4 px-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <BellIcon className="h-5 w-5" />
+              <TabsContent value="reminders" className="space-y-6 px-6 py-4">
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white">
+                      <BellIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Reminders</h3>
                   </div>
                   <div className="flex-1 space-y-4">
                     <div className="flex justify-between items-center">
@@ -1029,17 +1096,20 @@ export function EventDialog({
                       </div>
                     ))}
 
-                    <p className="text-xs text-mono-500">Reminders will be sent before the event starts</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Reminders will be sent before the event starts</p>
                   </div>
                 </div>
               </TabsContent>
 
-              <TabsContent value="timezone" className="space-y-4 px-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <GlobeIcon className="h-5 w-5" />
+              <TabsContent value="timezone" className="space-y-6 px-6 py-4">
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white">
+                      <GlobeIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Timezone</h3>
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <FormField
                       control={form.control}
                       name="timezone"
@@ -1067,19 +1137,22 @@ export function EventDialog({
                     />
 
                     <div className="mt-4 p-3 bg-mono-100 dark:bg-mono-800 rounded-lg">
-                      <h4 className="text-sm font-medium mb-2">Current time in {selectedTimezone}:</h4>
-                      <p className="text-sm">{new Date().toLocaleString("en-US", { timeZone: selectedTimezone })}</p>
+                      <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Current time in {selectedTimezone}:</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{new Date().toLocaleString("en-US", { timeZone: selectedTimezone })}</p>
                     </div>
                   </div>
                 </div>
               </TabsContent>
 
-              <TabsContent value="more" className="space-y-4 px-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-mono-100 dark:bg-mono-800 text-mono-500">
-                    <TagIcon className="h-5 w-5" />
+              <TabsContent value="more" className="space-y-6 px-6 py-4">
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white">
+                      <TagIcon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Additional Options</h3>
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <FormField
                       control={form.control}
                       name="category"
@@ -1108,12 +1181,12 @@ export function EventDialog({
                     />
 
                     {selectedCategory === "custom" && (
-                      <div className="mt-2">
+                      <div className="mt-3">
                         <Input
-                          placeholder="Enter custom category"
+                          placeholder="Enter custom category name..."
                           value={customCategory}
                           onChange={(e) => setCustomCategory(e.target.value)}
-                          className="rounded-lg border-mono-200 dark:border-mono-700 h-9"
+                          className="rounded-lg border-gray-300 dark:border-gray-600 h-11 text-base focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:border-transparent"
                         />
                       </div>
                     )}
@@ -1122,7 +1195,7 @@ export function EventDialog({
               </TabsContent>
             </Tabs>
 
-            <DialogFooter className="px-6 py-4 mt-4 bg-mono-50 dark:bg-mono-900">
+            <DialogFooter className="px-6 py-6 mt-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 border-t border-gray-200 dark:border-gray-800">
               <div className="flex w-full items-center justify-between">
                 {event && (
                   <Button
@@ -1131,31 +1204,31 @@ export function EventDialog({
                     onClick={handleDelete}
                     disabled={isDeleting}
                     className={cn(
-                      "rounded-lg text-sm",
+                      "rounded-xl text-sm h-11 px-6 font-medium transition-all duration-200",
                       confirmDelete
-                        ? "bg-mono-500 text-mono-50 hover:bg-mono-600 dark:bg-mono-400 dark:text-mono-900"
-                        : "text-mono-500 hover:text-mono-700 hover:bg-mono-100 dark:text-mono-400 dark:hover:text-mono-200",
+                        ? "bg-red-500 text-white hover:bg-red-600 shadow-lg hover:shadow-xl"
+                        : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-800",
                     )}
                   >
                     {confirmDelete ? (
                       <>
                         <CheckIcon className="mr-2 h-4 w-4" />
-                        Confirm
+                        Confirm Delete
                       </>
                     ) : (
                       <>
                         <TrashIcon className="mr-2 h-4 w-4" />
-                        {isDeleting ? "Deleting..." : "Delete"}
+                        {isDeleting ? "Deleting..." : "Delete Event"}
                       </>
                     )}
                   </Button>
                 )}
-                <div className="flex gap-2 ml-auto">
+                <div className="flex gap-3 ml-auto">
                   <Button
                     type="button"
                     variant="ghost"
                     onClick={() => onOpenChange(false)}
-                    className="rounded-lg text-sm bg-mono-100 dark:bg-mono-800 hover:bg-mono-200 dark:hover:bg-mono-700"
+                    className="rounded-xl text-sm h-11 px-6 font-medium border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
                   >
                     <XIcon className="mr-2 h-4 w-4" />
                     Cancel
@@ -1164,10 +1237,10 @@ export function EventDialog({
                     type="submit"
                     onClick={form.handleSubmit(onSubmit)}
                     disabled={form.formState.isSubmitting}
-                    className="rounded-lg text-sm bg-mono-900 text-mono-50 hover:bg-mono-800 dark:bg-mono-50 dark:text-mono-900 dark:hover:bg-mono-200"
+                    className="rounded-xl text-sm h-11 px-6 font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                   >
                     <CheckIcon className="mr-2 h-4 w-4" />
-                    {form.formState.isSubmitting ? "Saving..." : event ? "Update" : "Create"}
+                    {form.formState.isSubmitting ? "Saving..." : event ? "Update Event" : "Create Event"}
                   </Button>
                 </div>
               </div>

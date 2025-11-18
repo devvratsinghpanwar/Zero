@@ -1,10 +1,13 @@
+"use server"
+
 import { kv } from "@/lib/kv-config"
+import type { CalendarEvent } from "./calendar"
 
 
-export async function getEvents(userId: string, start: Date, end: Date) {
+export async function getEvents(userId: string, start: Date, end: Date): Promise<CalendarEvent[]> {
   try {
 
-    const events = await kv.lrange(`user:${userId}:events`, 0, -1)
+    const events = await kv.lrange<CalendarEvent>(`user:${userId}:events`, 0, -1)
 
 
     if (!events || events.length === 0) {
@@ -12,7 +15,7 @@ export async function getEvents(userId: string, start: Date, end: Date) {
     }
 
 
-    return events.filter((event) => {
+    return events.filter((event: CalendarEvent) => {
       const eventStart = new Date(event.start)
       return eventStart >= start && eventStart <= end
     })
@@ -34,8 +37,8 @@ export async function findAvailableTimeSlots(userId: string, date: string, durat
     endOfDay.setHours(23, 59, 59, 999)
 
 
-    const events = await kv.lrange(`user:${userId}:events`, 0, -1)
-    const dayEvents = events.filter((event) => {
+    const events = await kv.lrange<CalendarEvent>(`user:${userId}:events`, 0, -1)
+    const dayEvents = events.filter((event: CalendarEvent) => {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
       return (
@@ -46,7 +49,7 @@ export async function findAvailableTimeSlots(userId: string, date: string, durat
     })
 
 
-    dayEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+    dayEvents.sort((a: CalendarEvent, b: CalendarEvent) => new Date(a.start).getTime() - new Date(b.start).getTime())
 
 
     const workStart = new Date(targetDate)
@@ -59,7 +62,7 @@ export async function findAvailableTimeSlots(userId: string, date: string, durat
     const availableSlots = []
     let currentTime = new Date(workStart)
 
-    for (const event of dayEvents) {
+    for (const event of dayEvents as CalendarEvent[]) {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
 
@@ -112,8 +115,8 @@ export async function checkForConflicts(userId: string, start: string, end: stri
     const dayEnd = new Date(startTime)
     dayEnd.setHours(23, 59, 59, 999)
 
-    const events = await kv.lrange(`user:${userId}:events`, 0, -1)
-    const dayEvents = events.filter((event) => {
+    const events = await kv.lrange<CalendarEvent>(`user:${userId}:events`, 0, -1)
+    const dayEvents = events.filter((event: CalendarEvent) => {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
       return (
@@ -124,7 +127,7 @@ export async function checkForConflicts(userId: string, start: string, end: stri
     })
 
 
-    for (const event of dayEvents) {
+    for (const event of dayEvents as CalendarEvent[]) {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
 
@@ -152,8 +155,8 @@ export async function analyzeBusyTimes(userId: string, startDate: string, endDat
     const end = new Date(endDate)
 
 
-    const events = await kv.lrange(`user:${userId}:events`, 0, -1)
-    const rangeEvents = events.filter((event) => {
+    const events = await kv.lrange<CalendarEvent>(`user:${userId}:events`, 0, -1)
+    const rangeEvents = events.filter((event: CalendarEvent) => {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
       return (
@@ -164,7 +167,7 @@ export async function analyzeBusyTimes(userId: string, startDate: string, endDat
     })
 
 
-    const timeEvents = rangeEvents.filter((event) => !event.allDay)
+    const timeEvents = (rangeEvents as CalendarEvent[]).filter((event: CalendarEvent) => !event.allDay)
 
 
     const busyByDayOfWeek = [0, 0, 0, 0, 0, 0, 0]
@@ -173,7 +176,7 @@ export async function analyzeBusyTimes(userId: string, startDate: string, endDat
 
     const busyByHour = Array(24).fill(0)
 
-    timeEvents.forEach((event) => {
+    timeEvents.forEach((event: CalendarEvent) => {
       const eventStart = new Date(event.start)
       const eventEnd = new Date(event.end)
       const dayOfWeek = eventStart.getDay()

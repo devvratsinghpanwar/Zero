@@ -1,7 +1,6 @@
 import { getEvents, getTodayEvents, createEvent, updateEvent, deleteEvent } from "./calendar"
 import { findAvailableTimeSlots, checkForConflicts, analyzeBusyTimes } from "./calendar-utils"
-import { areIntervalsOverlapping, format, addDays, startOfDay, endOfDay, isSameDay } from "date-fns"
-
+import { format, addDays, startOfDay, endOfDay, areIntervalsOverlapping, isSameDay } from "date-fns"
 
 export const calendarTools = {
   getEvents,
@@ -16,7 +15,7 @@ export const calendarTools = {
       const thirtyDaysLater = new Date(now)
       thirtyDaysLater.setDate(now.getDate() + 30)
 
-      const events = await getEvents(userId, now.toISOString(), thirtyDaysLater.toISOString())
+      const events = await getEvents(userId, now, thirtyDaysLater)
 
 
       const lowerQuery = query.toLowerCase()
@@ -52,10 +51,16 @@ export const calendarTools = {
   },
   rescheduleEvent: async (userId: string, eventId: string, newStartTime: string, newEndTime: string) => {
     try {
-      return await updateEvent(userId, eventId, {
+      const event = await getEvents(userId, new Date(), new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
+      const eventToUpdate = event.find(e => e.id === eventId)
+      if (!eventToUpdate) throw new Error('Event not found')
+      
+      const updatedEvent = {
+        ...eventToUpdate,
         start: newStartTime,
         end: newEndTime,
-      })
+      }
+      return await updateEvent(updatedEvent)
     } catch (error) {
       console.error("Error rescheduling event:", error)
       throw error
@@ -531,15 +536,16 @@ export function getCalendarToolsForAgent(userId: string) {
         required: ["title", "startTime", "endTime"],
       },
       function: async (args: any) => {
-        return await calendarTools.createEvent(
+        return await calendarTools.createEvent({
+          title: args.title,
+          start: args.startTime,
+          end: args.endTime,
+          description: args.description,
+          location: args.location,
+          color: args.color,
           userId,
-          args.title,
-          args.startTime,
-          args.endTime,
-          args.description,
-          args.location,
-          args.color,
-        )
+          allDay: false,
+        })
       },
     },
   }

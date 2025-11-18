@@ -16,6 +16,7 @@ import {
   ChevronDownIcon,
   LockIcon,
   AlertCircleIcon,
+  BarChart3Icon,
 } from "lucide-react"
 import { ChatPanel } from "./chat-panel"
 import { cn } from "@/lib/utils"
@@ -199,6 +200,14 @@ export function Sidebar() {
                   <Button
                     variant="ghost"
                     className="w-full justify-start mb-1 font-normal"
+                    onClick={() => navigateTo("/analytics")}
+                  >
+                    <BarChart3Icon className="mr-2 h-4 w-4" />
+                    Analytics
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start mb-1 font-normal"
                     onClick={() => navigateTo("/tasks")}
                   >
                     <CheckSquareIcon className="mr-2 h-4 w-4" />
@@ -298,6 +307,9 @@ export function Sidebar() {
               <div className="flex flex-col items-center space-y-4 mt-4">
                 <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigateTo("/calendar")}>
                   <CalendarIcon className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigateTo("/analytics")}>
+                  <BarChart3Icon className="h-5 w-5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigateTo("/tasks")}>
                   <CheckSquareIcon className="h-5 w-5" />

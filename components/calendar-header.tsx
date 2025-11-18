@@ -15,11 +15,15 @@ import {
 import { CalendarIcon, SettingsIcon, LogOutIcon, BellIcon, SearchIcon, PlusIcon, MenuIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { ScheduleDialog } from "@/components/schedule-dialog"
+import { TasksBacklogDialog } from "@/components/tasks-backlog-dialog"
 
 export function CalendarHeader() {
   const { data: session } = useSession()
   const router = useRouter()
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  const [showTasksDialog, setShowTasksDialog] = useState(false)
 
   return (
     <header className="border-b bg-background shadow-soft">
@@ -41,12 +45,14 @@ export function CalendarHeader() {
             <Button
               variant="ghost"
               className="text-sm font-medium rounded-lg transition-colors hover:bg-mono-100 dark:hover:bg-mono-800"
+              onClick={() => setShowScheduleDialog(true)}
             >
               Schedule
             </Button>
             <Button
               variant="ghost"
               className="text-sm font-medium rounded-lg transition-colors hover:bg-mono-100 dark:hover:bg-mono-800"
+              onClick={() => setShowTasksDialog(true)}
             >
               Tasks
             </Button>
@@ -68,6 +74,7 @@ export function CalendarHeader() {
             variant="outline"
             size="sm"
             className="hidden md:flex gap-1 h-9 items-center rounded-lg border-mono-200 dark:border-mono-700"
+            onClick={() => router.push("/analytics")}
           >
             <PlusIcon className="h-4 w-4" />
             <span>Create</span>
@@ -145,22 +152,38 @@ export function CalendarHeader() {
             <Button
               variant="ghost"
               className="w-full justify-start text-sm rounded-lg hover:bg-mono-100 dark:hover:bg-mono-800"
+              onClick={() => setShowScheduleDialog(true)}
             >
               Schedule
             </Button>
             <Button
               variant="ghost"
               className="w-full justify-start text-sm rounded-lg hover:bg-mono-100 dark:hover:bg-mono-800"
+              onClick={() => setShowTasksDialog(true)}
             >
               Tasks
             </Button>
-            <Button variant="outline" className="w-full gap-1 mt-2 rounded-lg border-mono-200 dark:border-mono-700">
+            <Button 
+              variant="outline" 
+              className="w-full gap-1 mt-2 rounded-lg border-mono-200 dark:border-mono-700"
+              onClick={() => router.push("/analytics")}
+            >
               <PlusIcon className="h-4 w-4" />
               <span>Create</span>
             </Button>
           </div>
         </div>
       )}
+
+      {/* Dialog Components */}
+      <ScheduleDialog 
+        open={showScheduleDialog} 
+        onOpenChange={setShowScheduleDialog}
+      />
+      <TasksBacklogDialog 
+        open={showTasksDialog} 
+        onOpenChange={setShowTasksDialog}
+      />
     </header>
   )
 }

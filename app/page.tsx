@@ -4,7 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { CalendarIcon, ArrowRightIcon, CheckIcon, ExternalLinkIcon, MenuIcon, GithubIcon } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "../components/theme-toggle"
 import { motion } from "framer-motion"
 
 const fadeIn = {

@@ -101,10 +101,10 @@ export function SearchDialog({ open, onOpenChange, onEventSelect }: SearchDialog
                           <span>{event.location}</span>
                         </div>
                       )}
-                      {event.category && (
+                      {event.categoryId && (
                         <div className="flex items-center gap-1">
                           <TagIcon className="h-3.5 w-3.5" />
-                          <span>{event.category}</span>
+                          <span>{event.categoryId}</span>
                         </div>
                       )}
                     </div>

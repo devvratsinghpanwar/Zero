@@ -94,8 +94,8 @@ export function ChatPanel({ open, onOpenChange, onToolExecution }: ChatPanelProp
     setError(null)
 
 
-    const userMessageObj = {
-      role: "user",
+    const userMessageObj: Message = {
+      role: "user" as const,
       content: userMessage,
       id: "user-" + Date.now(),
     }

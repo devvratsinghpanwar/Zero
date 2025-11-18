@@ -49,7 +49,7 @@ export function SettingsForm({ initialPreferences }: SettingsFormProps) {
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!session?.user?.sub) {
+    if (!session?.user?.id) {
       toast({
         title: "Error",
         description: "You must be logged in to save preferences",
@@ -60,7 +60,7 @@ export function SettingsForm({ initialPreferences }: SettingsFormProps) {
 
     setIsLoading(true)
     try {
-      await saveUserPreferences(session.user.sub, values)
+      await saveUserPreferences(session.user.id, values)
 
 
       setTheme(values.theme)

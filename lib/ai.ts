@@ -1,3 +1,5 @@
+"use server"
+
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
 import { calendarTools } from "./ai-tools"
@@ -199,7 +201,7 @@ async function executeToolCall(userId: string, toolName: string, args: any) {
 
     try {
 
-      const result = await calendarTools[toolName](...argsArray)
+      const result = await (calendarTools as any)[toolName](...argsArray)
       return result
     } catch (toolError) {
       console.error(`Error executing tool ${toolName}:`, toolError)
@@ -263,19 +265,19 @@ export async function processCalendarQuery(query: string, userId: string, conver
 
 
           const toolResults = await Promise.all(
-            initialResponse.toolCalls.map(async (call) => {
+            initialResponse.toolCalls.map(async (call: any) => {
               try {
-                const result = await executeToolCall(userId, call.name, call.arguments)
+                const result = await executeToolCall(userId, call.toolName || call.name, call.args || call.arguments)
                 return {
-                  tool: call.name,
-                  args: call.arguments,
+                  tool: call.toolName || call.name,
+                  args: call.args || call.arguments,
                   result,
                 }
               } catch (error) {
-                console.error(`Error executing tool ${call.name}:`, error)
+                console.error(`Error executing tool ${(call as any).toolName || (call as any).name}:`, error)
                 return {
-                  tool: call.name,
-                  args: call.arguments,
+                  tool: (call as any).toolName || (call as any).name,
+                  args: (call as any).args || (call as any).arguments,
                   result: { error: true, message: error instanceof Error ? error.message : "Unknown error" },
                 }
               }
