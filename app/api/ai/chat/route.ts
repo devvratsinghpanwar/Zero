@@ -1,6 +1,7 @@
 import { groq } from "@ai-sdk/groq"
 import { generateText } from "ai"
-import { auth } from "@/lib/auth"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 import { calendarTools } from "@/lib/ai-tools"
 import { createEvent, updateEvent, deleteEvent, getEvents } from "@/lib/calendar"
 import { getSystemPrompt } from "@/lib/system-prompts"
@@ -13,7 +14,7 @@ const conversationContexts = new Map<string, string>()
 
 export async function POST(req: Request) {
   try {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user) {
       return new Response("Unauthorized", { status: 401 })
     }
